@@ -37,18 +37,19 @@ c.execute("CREATE TABLE IF NOT EXISTS summoner"
           "server TEXT,"
           "owner TEXT)")
 
-c.execute("CREATE TABLE IF NOT EXISTS rank"
-          "(queue_type TEXT NOT NULL,"
-          "division TEXT NOT NULL,"
-          "tier TEXT NOT NULL,"
-          "summoner_id TEXT NOT NULL,"
-          "FOREIGN KEY(summoner_id) REFERENCES summoner(summoner_id) ON DELETE CASCADE)")
+# c.execute("CREATE TABLE IF NOT EXISTS rank"
+#           "(queue_type TEXT NOT NULL,"
+#           "division TEXT NOT NULL,"
+#           "tier TEXT NOT NULL,"
+#           "summoner_id TEXT NOT NULL,"
+#           "FOREIGN KEY(summoner_id) REFERENCES summoner(summoner_id) ON DELETE CASCADE)")
 
 ALL_CHAMPIONS_URL = 'http://ddragon.leagueoflegends.com/cdn/11.11.1/data/en_US/champion.json'
 GET_SUMMONER_URL = 'https://{}.api.riotgames.com/lol/summoner/v4/summoners/by-name/{}?api_key=' + RIOT_KEY
 GET_RANK_URL = 'https://{}.api.riotgames.com/lol/league/v4/entries/by-summoner/{}?api_key=' + RIOT_KEY
 
 guild_ids = [int(guild) for guild in GUILDS.split(',')]
+
 
 @bot.event
 async def on_command_error(ctx, error):
@@ -62,7 +63,6 @@ async def on_ready():
 
 
 @slash.slash(name='test',
-             guild_ids=guild_ids,
              description='test command')
 async def slash_test(ctx: SlashContext):
     print(ctx.author.id)
@@ -77,8 +77,8 @@ async def test(ctx, *args):
     print(ctx.message.author.name)
     print(args)
 
+
 @slash.slash(name='random',
-             guild_ids=guild_ids,
              description='Send a random champion name',
              options=[
                  create_option(
@@ -112,17 +112,52 @@ async def test(ctx, *args):
                              value='Marksman'
                          )
                      ]
+                 ),
+                 create_option(
+                     name='secondary_role',
+                     description='secondary role of the desired champion',
+                     option_type=SlashCommandOptionType.STRING,
+                     required=False,
+                     choices=[
+                         create_choice(
+                             name='Fighter',
+                             value='Fighter'
+                         ),
+                         create_choice(
+                             name='Tank',
+                             value='Tank'
+                         ),
+                         create_choice(
+                             name='Mage',
+                             value='Mage'
+                         ),
+                         create_choice(
+                             name='Assassin',
+                             value='Assassin'
+                         ),
+                         create_choice(
+                             name='Support',
+                             value='Support'
+                         ),
+                         create_choice(
+                             name='Marksman',
+                             value='Marksman'
+                         )
+                     ]
                  )
              ])
-async def slash_random_champ(ctx: SlashContext, role):
+async def random_champ(ctx: SlashContext, role=None, secondary_role=None):
     req = json.loads(requests.get(ALL_CHAMPIONS_URL).text)
     champions = list(req['data'].keys())
-    if len(role) > 0:
+    if role:
         print(role)
         filtered_champions = set()
         for champion in champions:
             if role in req['data'][champion]['tags']:
-                filtered_champions.add(req['data'][champion]['id'])
+                if secondary_role and secondary_role in req['data'][champion]['tags']:
+                    filtered_champions.add(req['data'][champion]['id'])
+                else:
+                    filtered_champions.add(req['data'][champion]['id'])
         if len(filtered_champions) > 0:
             filtered_champions = list(filtered_champions)
             i = random.choice(filtered_champions)
@@ -135,18 +170,17 @@ async def slash_random_champ(ctx: SlashContext, role):
 
 
 @slash.slash(name='register',
-             guild_ids=guild_ids,
              description='register summoner to your discord-user',
              options=[
                  create_option(
                      name='summoner_name',
-                     description='the summoner name of the account you want to link',
+                     description='the summoner name you want to link to your user',
                      option_type=SlashCommandOptionType.STRING,
                      required=True
                  ),
                  create_option(
                      name='server',
-                     description='the server the account is on kek',
+                     description='the server the summoner is on',
                      option_type=SlashCommandOptionType.STRING,
                      required=True,
                      choices=[
@@ -205,8 +239,12 @@ async def register(ctx, summoner_name, server):
             print("summoner resp: ", summoner_resp.status_code)
             summoner_data = json.loads(summoner_resp.text)
             summoner_id = summoner_data['id']
-            c.execute("INSERT INTO summoner(summoner_id, summoner_name, server, owner) VALUES(?,?,?,?)",
-                      (summoner_id, summoner_name, server, str(ctx.author.id)))
+            try:
+                c.execute("INSERT INTO summoner(summoner_id, summoner_name, server, owner) VALUES(?,?,?,?)",
+                         (summoner_id, summoner_name, server, str(ctx.author.id)))
+            except sqlite3.IntegrityError:
+                await ctx.send("Summoner is already registered")
+                return
             print("summoner added")
             conn.commit()
         else:
@@ -217,16 +255,12 @@ async def register(ctx, summoner_name, server):
         if summoner_id is not None:
             rank_resp = requests.get(GET_RANK_URL.format(server, summoner_id))
             if rank_resp.status_code == 200:
-                print("rank resp: ", summoner_resp.status_code)
+                print("rank resp: ", rank_resp.status_code)
                 rank_data = json.loads(rank_resp.text)
                 for data in rank_data:
                     tier = data['tier']
                     rank = data['rank']
                     queue_type = data['queueType']
-                    if tier and rank and queue_type:
-                        c.execute("INSERT INTO rank(queue_type, division, tier, summoner_id) VALUES(?,?,?,?)",
-                                  (queue_type, rank, tier, summoner_id))
-                        conn.commit()
                 if rank and tier:
                     await ctx.send(f"{summoner_name} at {tier} {rank} found and registered")
                 else:
@@ -236,26 +270,117 @@ async def register(ctx, summoner_name, server):
 
 
 @slash.slash(name='rank',
-             guild_ids=guild_ids,
-             description='retrieves the rank of summoners linked to your discord account')
+             description='retrieves the rank of summoners linked to your user')
 async def get_rank(ctx):
-    c.execute("SELECT s.summoner_name, s.server, r.tier, r.division, r.queue_type FROM summoner s "
-              "LEFT JOIN rank r on s.summoner_id=r.summoner_id "
-              "WHERE s.owner = ?",
+    c.execute("SELECT summoner_name, server, summoner_id FROM summoner WHERE owner = ?",
               (ctx.author.id,))
     data = c.fetchall()
     print(data)
     message = ''
     for i in data:
-        print(i)
-        if i[0] and i[1] and i[2] and i[3] and [4]:
-            message += f"{i[0]} on {i[1]} is {i[2]} {i[3]} in {i[4]}\n"
-        elif not i[2] and not i[3] and not i[4]:
-            message += f"{i[0]} on {i[1]} has no rank\n"
+        summoner_name = i[0]
+        server = i[1]
+        summoner_id = i[2]
+        rank_resp = requests.get(GET_RANK_URL.format(server, summoner_id))
+        print("rank resp: ", rank_resp.status_code)
+        rank_data = json.loads(rank_resp.text)
+        if rank_data:
+            for data in rank_data:
+                if data['summonerName'] != summoner_name:
+                    c.execute('UPDATE summoner SET summoner_name=? WHERE summoner_id=?',
+                              (data['summonerName'], summoner_id))
+                    message += f'*Updating summoner name from {summoner_name} to {data["summonerName"]}*\n'
+                message += f"{data['summonerName']} on {server} is {data['tier']} {data['rank']}" \
+                           f" - {data['leaguePoints']} LP in {data['queueType']}\n"
+            print(i)
+        else:
+            message += f'{summoner_name} is unranked'
     if len(message):
         await ctx.send(message)
     else:
-        await ctx.send("there are no summoners linked to your account")
+        await ctx.send("there are no summoners linked to your user")
+
+
+@slash.slash(name='delete',
+             description='delete all summoners or a specific summoner linked to user',
+             options=[
+                create_option(
+                    name='summoner_name',
+                    description='the summoner name you want to delete'
+                                '(leave empty to delete all summoners)',
+                    option_type=SlashCommandOptionType.STRING,
+                    required=False
+                ),
+                 create_option(
+                     name='server',
+                     description='the server your summoner is on',
+                     option_type=SlashCommandOptionType.STRING,
+                     required=False,
+                     choices=[
+                         create_choice(
+                             name='EUW',
+                             value='EUW1'
+                         ),
+                         create_choice(
+                             name='EUNE',
+                             value='EUN1'
+                         ),
+                         create_choice(
+                             name='BR',
+                             value='BR1'
+                         ),
+                         create_choice(
+                             name='JP',
+                             value='JP1'
+                         ),
+                         create_choice(
+                             name='KR',
+                             value='KR'
+                         ),
+                         create_choice(
+                             name='LA1',
+                             value='LA1'
+                         ),
+                         create_choice(
+                             name='LA2',
+                             value='LA2'
+                         ),
+                         create_choice(
+                             name='NA',
+                             value='NA1'
+                         ),
+                         create_choice(
+                             name='OC',
+                             value='OC1'
+                         ),
+                         create_choice(
+                             name='RU',
+                             value='RU'
+                         ),
+                         create_choice(
+                             name='TR',
+                             value='TR1'
+                         )
+                     ]
+                 )
+             ])
+async def delete_summoners(ctx, summoner_name=None, server=None):
+    if summoner_name:
+        c.execute('DELETE FROM summoner WHERE summoner_name=? AND server=? AND owner=?',
+                  (summoner_name, server, ctx.author.id))
+        if c.rowcount > 0:
+            conn.commit()
+            await ctx.send(f'{summoner_name} deleted')
+        else:
+            await ctx.send(f"the summoner {summoner_name} could not be found or is not linked to your user")
+
+    else:
+        c.execute('DELETE FROM summoner WHERE owner=?', (ctx.author.id,))
+        if c.rowcount > 0:
+            conn.commit()
+            await ctx.send("all summoners deleted")
+        else:
+            await ctx.send("no summoners linked to your user")
 
 
 if __name__ == '__main__':
