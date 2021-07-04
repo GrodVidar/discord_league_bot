@@ -250,23 +250,24 @@ async def register(ctx, summoner_name, server):
         else:
             await ctx.send(f"Could not find a summoner with name {summoner_name} on {server}.")
             return
-        tier = ''
-        rank = ''
+        message = ''
         if summoner_id is not None:
             rank_resp = requests.get(GET_RANK_URL.format(server, summoner_id))
-            if rank_resp.status_code == 200:
+            if rank_resp and rank_resp.status_code == 200:
                 print("rank resp: ", rank_resp.status_code)
                 rank_data = json.loads(rank_resp.text)
                 for data in rank_data:
                     tier = data['tier']
                     rank = data['rank']
                     queue_type = data['queueType']
-                if rank and tier:
-                    await ctx.send(f"{summoner_name} at {tier} {rank} found and registered")
+                    lp = data['leaguePoints']
+                    message += f'{summoner_name} at {tier} {rank} - {lp} LP in {queue_type} found \n'
+                if message != '':
+                    await ctx.send(message)
                 else:
                     await ctx.send(f"{summoner_name} found and registered")
             else:
-                await ctx.send(f"could not find a rank for {summoner_name}")
+                await ctx.send(f"{summoner_name} found and registered")
 
 
 @slash.slash(name='rank',
