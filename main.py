@@ -50,6 +50,25 @@ GET_RANK_URL = 'https://{}.api.riotgames.com/lol/league/v4/entries/by-summoner/{
 
 guild_ids = [int(guild) for guild in GUILDS.split(',')]
 
+servers = [create_choice(name='EUW', value='EUW1'),
+           create_choice(name='EUNE', value='EUN1'),
+           create_choice(name='BR', value='BR1'),
+           create_choice(name='JP', value='JP1'),
+           create_choice(name='KR', value='KR'),
+           create_choice(name='LA1', value='LA1'),
+           create_choice(name='LA2', value='LA2'),
+           create_choice(name='NA', value='NA1'),
+           create_choice(name='OC', value='OC1'),
+           create_choice(name='RU', value='RU'),
+           create_choice(name='TR', value='TR1')]
+
+roles = [create_choice(name='Fighter', value='Fighter'),
+         create_choice(name='Tank', value='Tank'),
+         create_choice(name='Mage', value='Mage'),
+         create_choice(name='Assassin', value='Assassin'),
+         create_choice(name='Support', value='Support'),
+         create_choice(name='Marksman', value='Marksman')]
+
 
 @bot.event
 async def on_command_error(ctx, error):
@@ -86,64 +105,14 @@ async def test(ctx, *args):
                      description='the type of the desired champion',
                      option_type=SlashCommandOptionType.STRING,
                      required=False,
-                     choices=[
-                         create_choice(
-                             name='Fighter',
-                             value='Fighter'
-                         ),
-                         create_choice(
-                             name='Tank',
-                             value='Tank'
-                         ),
-                         create_choice(
-                             name='Mage',
-                             value='Mage'
-                         ),
-                         create_choice(
-                             name='Assassin',
-                             value='Assassin'
-                         ),
-                         create_choice(
-                             name='Support',
-                             value='Support'
-                         ),
-                         create_choice(
-                             name='Marksman',
-                             value='Marksman'
-                         )
-                     ]
+                     choices=roles
                  ),
                  create_option(
                      name='secondary_role',
                      description='secondary role of the desired champion',
                      option_type=SlashCommandOptionType.STRING,
                      required=False,
-                     choices=[
-                         create_choice(
-                             name='Fighter',
-                             value='Fighter'
-                         ),
-                         create_choice(
-                             name='Tank',
-                             value='Tank'
-                         ),
-                         create_choice(
-                             name='Mage',
-                             value='Mage'
-                         ),
-                         create_choice(
-                             name='Assassin',
-                             value='Assassin'
-                         ),
-                         create_choice(
-                             name='Support',
-                             value='Support'
-                         ),
-                         create_choice(
-                             name='Marksman',
-                             value='Marksman'
-                         )
-                     ]
+                     choices=roles
                  )
              ])
 async def random_champ(ctx: SlashContext, role=None, secondary_role=None):
@@ -155,9 +124,9 @@ async def random_champ(ctx: SlashContext, role=None, secondary_role=None):
         for champion in champions:
             if role in req['data'][champion]['tags']:
                 if secondary_role and secondary_role in req['data'][champion]['tags']:
-                    filtered_champions.add(req['data'][champion]['id'])
+                    filtered_champions.add(req['data'][champion]['name'])
                 else:
-                    filtered_champions.add(req['data'][champion]['id'])
+                    filtered_champions.add(req['data'][champion]['name'])
         if len(filtered_champions) > 0:
             filtered_champions = list(filtered_champions)
             i = random.choice(filtered_champions)
@@ -183,52 +152,7 @@ async def random_champ(ctx: SlashContext, role=None, secondary_role=None):
                      description='the server the summoner is on',
                      option_type=SlashCommandOptionType.STRING,
                      required=True,
-                     choices=[
-                         create_choice(
-                             name='EUW',
-                             value='EUW1'
-                         ),
-                         create_choice(
-                             name='EUNE',
-                             value='EUN1'
-                         ),
-                         create_choice(
-                             name='BR',
-                             value='BR1'
-                         ),
-                         create_choice(
-                             name='JP',
-                             value='JP1'
-                         ),
-                         create_choice(
-                             name='KR',
-                             value='KR'
-                         ),
-                         create_choice(
-                             name='LA1',
-                             value='LA1'
-                         ),
-                         create_choice(
-                             name='LA2',
-                             value='LA2'
-                         ),
-                         create_choice(
-                             name='NA',
-                             value='NA1'
-                         ),
-                         create_choice(
-                             name='OC',
-                             value='OC1'
-                         ),
-                         create_choice(
-                             name='RU',
-                             value='RU'
-                         ),
-                         create_choice(
-                             name='TR',
-                             value='TR1'
-                         ),
-                     ]
+                     choices=servers
                  )
              ])
 async def register(ctx, summoner_name, server):
@@ -312,58 +236,13 @@ async def get_rank(ctx):
                     option_type=SlashCommandOptionType.STRING,
                     required=False
                 ),
-                 create_option(
+                create_option(
                      name='server',
                      description='the server your summoner is on',
                      option_type=SlashCommandOptionType.STRING,
                      required=False,
-                     choices=[
-                         create_choice(
-                             name='EUW',
-                             value='EUW1'
-                         ),
-                         create_choice(
-                             name='EUNE',
-                             value='EUN1'
-                         ),
-                         create_choice(
-                             name='BR',
-                             value='BR1'
-                         ),
-                         create_choice(
-                             name='JP',
-                             value='JP1'
-                         ),
-                         create_choice(
-                             name='KR',
-                             value='KR'
-                         ),
-                         create_choice(
-                             name='LA1',
-                             value='LA1'
-                         ),
-                         create_choice(
-                             name='LA2',
-                             value='LA2'
-                         ),
-                         create_choice(
-                             name='NA',
-                             value='NA1'
-                         ),
-                         create_choice(
-                             name='OC',
-                             value='OC1'
-                         ),
-                         create_choice(
-                             name='RU',
-                             value='RU'
-                         ),
-                         create_choice(
-                             name='TR',
-                             value='TR1'
-                         )
-                     ]
-                 )
+                     choices=servers
+                )
              ])
 async def delete_summoners(ctx, summoner_name=None, server=None):
     if summoner_name:
